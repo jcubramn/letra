@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {playlistId,parsePlaylist,loadPlaylist} from '../lib/spotify-playlist.ts';
+const id='3cEYpjA9oz9GiPac4AsH4n',track='4rzfv0JLZfVhOhbSQ8o5jZ';
+assert.equal(playlistId('https://open.spotify.com/playlist/'+id+'?si=example'),id);
+assert.equal(playlistId('spotify:playlist:'+id),id);
+assert.equal(playlistId('https://open.spotify.com/intl-es/playlist/'+id),id);
+for(const url of ['http://open.spotify.com/playlist/'+id,'https://open.spotify.com.evil.test/playlist/'+id,'https://open.spotify.com/track/'+track,'https://user@open.spotify.com/playlist/'+id,'https://127.0.0.1/playlist/'+id])assert.throws(()=>playlistId(url));
+const entity={type:'playlist',uri:'spotify:playlist:'+id,name:'Practice playlist',trackList:[{uri:'spotify:track:'+track,title:'Api',subtitle:'Odiseo'},{uri:'spotify:track:'+track,title:'Api',subtitle:'Odiseo'},{uri:'spotify:episode:'+track,title:'Podcast',subtitle:'Person'}]};
+const html='<script type="application/json" id="__NEXT_DATA__">'+JSON.stringify({props:{pageProps:{state:{data:{entity}}}}})+'</script>';
+const parsed=parsePlaylist(html,id);assert.equal(parsed.tracks.length,1);assert.equal(parsed.tracks[0].artist,'Odiseo');assert.equal(parsed.previewOnly,true);assert.throws(()=>parsePlaylist('<html>Not available</html>',id));
+const live=await loadPlaylist('https://open.spotify.com/playlist/'+id);assert.ok(live.tracks.length>0);assert.ok(live.tracks.every(t=>t.url.startsWith('https://open.spotify.com/track/')));
+console.log('Passed: URL validation, SSRF rejection, preview parsing, duplicate/podcast filtering, unavailable errors, live Spotify playlist read ('+live.tracks.length+' tracks).');

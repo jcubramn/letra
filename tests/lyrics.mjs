@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';
+import {lookupLyrics,selectLyrics,cleanLyrics} from '../lib/lyrics.ts';
+const first={id:1,trackName:'Practice Song',artistName:'Letra',albumName:'First',duration:210,plainLyrics:'Open the window\nListen to the city'};
+const second={...first,id:2,albumName:'Second',duration:270,plainLyrics:'Walk along the river\nSing into the evening'};
+assert.equal(selectLyrics([{...first,artistName:'Wrong cover artist'}],{title:'Practice Song',artist:'Letra'}).status,'not_found');
+assert.equal(selectLyrics([first,second],{title:'Practice Song',artist:'Letra',duration:210}).status,'found');
+assert.equal(selectLyrics([first,second],{title:'Practice Song',artist:'Letra'}).status,'choose');
+assert.equal(selectLyrics([first,{...first,id:3}],{title:'Practice Song',artist:'Letra'}).status,'found');
+assert.equal(selectLyrics([{...first,instrumental:true,plainLyrics:null}],{title:'Practice Song',artist:'Letra'}).status,'instrumental');
+assert.equal(cleanLyrics('[ar:Letra]\n[00:01.00]Open the window\n[00:02.00][00:03.00]Listen to the city'),'Open the window\nListen to the city');
+const synced={...first,plainLyrics:null,syncedLyrics:'[00:01.00]Open the window\n[00:02.00]Listen to the city'};
+assert.equal(selectLyrics([synced],{title:'Practice Song',artist:'Letra'}).lyrics,first.plainLyrics);
+let called=false;await assert.rejects(()=>lookupLyrics({id:-1},async()=>{called=true;return new Response()}));assert.equal(called,false);
+await assert.rejects(()=>lookupLyrics({title:'Practice Song',artist:'Letra'},async()=>new Response('',{status:429})),/unavailable/);
+const live=await lookupLyrics({title:'La Camisa Negra',artist:'Juanes'});assert.ok(['found','choose'].includes(live.status));const exact=live.status==='found'?live:await lookupLyrics({id:live.matches[0].id});assert.equal(exact.status,'found');assert.ok(exact.lyrics.length>100);assert.equal(exact.source.provider,'LRCLIB');
+console.log('Passed: cover rejection, version choice, duration matching, duplicates, instrumental handling, synced cleanup, bad input, upstream errors, and free live LRCLIB lookup (lyrics not printed).');
+
+const freeFallback=await lookupLyrics({title:'Practice Song',artist:'Letra'},async url=>String(url).startsWith('https://api.lyrics.ovh/')?Response.json({lyrics:first.plainLyrics}):Response.json([]));assert.equal(freeFallback.status,'found');assert.equal(freeFallback.source.provider,'lyrics.ovh');
+const recovered=await lookupLyrics({title:'Practice Song',artist:'Letra'},async url=>String(url).startsWith('https://api.lyrics.ovh/')?Response.json({lyrics:first.plainLyrics}):new Response('',{status:503}));assert.equal(recovered.status,'found');
+const ambiguous=await lookupLyrics({title:'Practice Song',artist:'Letra'},async url=>String(url).startsWith('https://api.lyrics.ovh/')?new Response('',{status:404}):Response.json([first,second]));assert.equal(ambiguous.status,'choose');
+const absent=await lookupLyrics({title:'Practice Song',artist:'Letra'},async url=>String(url).startsWith('https://api.lyrics.ovh/')?new Response('',{status:404}):Response.json([]));assert.equal(absent.status,'not_found');
+assert.equal(selectLyrics([first,{...first,id:3,plainLyrics:'Open the window!\nListen to the city.'}],{title:'Practice Song',artist:'Letra'}).status,'found');
+assert.equal(selectLyrics([{...first,artistName:'Letra • Guest'}],{title:'Practice Song',artist:'Letra, Guest'}).status,'found');
+console.log('Passed: free secondary source, primary outage recovery, true version choices, both sources missing, formatting deduplication, alternate collaboration credits.');
